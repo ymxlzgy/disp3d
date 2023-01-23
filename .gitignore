@@ -6,5 +6,4 @@ log/
 data
 .egg-info/
 distance/
-other_models
 pcds/
