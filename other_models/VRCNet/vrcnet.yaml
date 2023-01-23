@@ -4,7 +4,7 @@ nepoch: 100
 model_name: vrcnet
 load_model: null
 start_epoch: 0
-num_points: 4096
+num_points: 16384
 work_dir: log/
 flag: debug
 loss: cd

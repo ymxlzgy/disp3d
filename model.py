@@ -9,10 +9,10 @@ import numpy as np
 import torch.nn.functional as F
 import sys
 import pointnet_feat as pn
-import softpool as sp
-from other_models.MSN import msn
+# import softpool as sp
+# from other_models.MSN import msn
 # import MSN.MDS.MDS_module as MDS_module
-import MSN.expansion_penalty.expansion_penalty_module as expasion
+# import MSN.expansion_penalty.expansion_penalty_module as expasion
 # from MSN.MDS.MDS_module import MinimumDensitySampling as mds
 
 import argparse
@@ -68,7 +68,7 @@ class Network(nn.Module):
                 pn.PointNetFeat(npoints, 1024), nn.Linear(1024, dim_pn),
                 nn.BatchNorm1d(dim_pn), nn.ReLU())
             self.expansion = expasion.expansionPenaltyModule()
-            self.msn = msn.MSN()
+            self.msn = msn.MSN(bottleneck_size=self.dim_pn)
 
         if ('grnet' in self.model_lists):
             from GRNet import grnet
@@ -86,12 +86,12 @@ class Network(nn.Module):
             self.pcn = PCN().cuda()
 
         if ('disp3d' in self.model_lists):
-            import displace.encode as disp3d
+            import other_models.displace.encode as disp3d
             self.disp_enc = disp3d.Encoder(support_num=10, neighbor_num=20)
 
             # NOTE: initial setting for disp3d without image inputs
             #     degrees=[1, 2, 2, 2, 2, 4, 64],
-            from displace.decode import Decoder
+            from other_models.displace.decode import Decoder
             self.disp_dec = Decoder(
                 features=[1024, 256, 256, 256, 128, 128, 128, 3],
                 degrees=[1, 2, 2, 2, 2, 4, 64],
@@ -103,24 +103,55 @@ class Network(nn.Module):
                     class_num=12, support_num=10, neighbor_num=20)
 
         if ('im_disp3d' in self.model_lists):
-            from pix2vox.encoder import Encoder
+            from other_models.pix2vox.encoder import Encoder
             self.encoder_img = Encoder()
 
             # NOTE: initial setting for disp3d without image inputs
             #     degrees=[1, 2, 2, 2, 2, 4, 64],
-            from displace.decode import Decoder
+            from other_models.displace.decode import Decoder
+            self.disp_dec = Decoder(
+                features=[1024, 256, 256, 256, 128, 128, 128, 3],
+                degrees=[1, 2, 2, 2, 2, 4, 64],
+                support=10,
+                root_num=1)
+        if ('im_pc_disp3d' in self.model_lists):
+            from other_models.im_pc_disp3d.resnet_encoder import Encoder
+            self.encoder_img = Encoder()
+
+            # NOTE: initial setting for disp3d without image inputs
+            #     degrees=[1, 2, 2, 2, 2, 4, 64],
+            import other_models.im_pc_disp3d.encode as disp3d
+            self.disp_enc = disp3d.Encoder(support_num=10, neighbor_num=20)
+            from other_models.im_pc_disp3d.decode import Decoder
             self.disp_dec = Decoder(
                 features=[1024, 256, 256, 256, 128, 128, 128, 3],
                 degrees=[1, 2, 2, 2, 2, 4, 64],
                 support=10,
                 root_num=1)
 
+        if ('im_pc_disp3d_trans' in self.model_lists):
+            # NOTE: Transformer
+            import yaml
+            from other_models.im_pc_disp3d_trans.resnet_encoder import Encoder
+            self.encoder_img = Encoder()
+
+            # NOTE: initial setting for disp3d without image inputs
+            #     degrees=[1, 2, 2, 2, 2, 4, 64],
+
+
+
+            from other_models.im_pc_disp3d_trans.PoinTr import Disp_PoinTr
+            self.disp_pointr = Disp_PoinTr(
+                dict2namespace(
+                    yaml.safe_load(
+                        open('other_models/im_pc_disp3d_trans/PoinTr.yaml'))['model']))
+
         if ('shapegf' in self.model_lists):
             import yaml
             import importlib
 
             with open('other_models/shapegf/shapenet_recon.yaml', 'r') as f:
-                cfg = yaml.load(f)
+                cfg = yaml.safe_load(f)
             cfg = dict2namespace(cfg)
             cfg.log_name = "logs/val"
             cfg.save_dir = "logs/val"
@@ -146,16 +177,16 @@ class Network(nn.Module):
 
         if ('pointr' in self.model_lists):
             import yaml
-            from pointr.PoinTr import PoinTr
+            from other_models.pointr.PoinTr import PoinTr
             self.pointr = PoinTr(
                 dict2namespace(
-                    yaml.load(
+                    yaml.safe_load(
                         open('other_models/pointr/PoinTr.yaml'))['model']))
             # self.pointr = PoinTr(dict2namespace(yaml.load(open('other_models/pointr/ftrans.yaml'))['model']))
 
         if ('im_pointr' in self.model_lists):
             # NOTE: 2D encoder: ResNet
-            from pix2vox.encoder import Encoder
+            from other_models.pix2vox.encoder import Encoder
             self.encoder_img = Encoder()
             """
             # NOTE: 2D encoder: ConvTransformer
@@ -165,11 +196,47 @@ class Network(nn.Module):
 
             # NOTE: 3D decoder
             import yaml
-            from imgpointr.PoinTr import PoinTr
+            from other_models.imgpointr.PoinTr import PoinTr
             self.pointr = PoinTr(
                 dict2namespace(
-                    yaml.load(
+                    yaml.safe_load(
                         open('other_models/imgpointr/PoinTr.yaml'))['model']))
+
+        if ('im_pc_pointr' in self.model_lists):
+            # NOTE: 2D encoder: ResNet
+            from other_models.img_pc_pointr.resnet_encoder import Encoder
+            self.encoder_img = Encoder()
+            """
+            # NOTE: 2D encoder: ConvTransformer
+            from pix2vox.model import Model_encoder, Bottleneck
+            self.encoder_img = Model_encoder(Bottleneck, [3, 4, 6, 3])
+            """
+
+            # NOTE: 3D decoder
+            import yaml
+            from other_models.img_pc_pointr.PoinTr import PoinTr
+            self.pointr = PoinTr(
+                dict2namespace(
+                    yaml.safe_load(
+                        open('other_models/img_pc_pointr/PoinTr.yaml'))['model']))
+
+        if ('im_pc_pointr_2' in self.model_lists):
+            # NOTE: 2D encoder: ResNet
+            from other_models.im_pc_pointr_2.resnet_encoder import Encoder
+            self.encoder_img = Encoder()
+            """
+            # NOTE: 2D encoder: ConvTransformer
+            from pix2vox.model import Model_encoder, Bottleneck
+            self.encoder_img = Model_encoder(Bottleneck, [3, 4, 6, 3])
+            """
+
+            # NOTE: 3D decoder
+            import yaml
+            from other_models.im_pc_pointr_2.PoinTr import PoinTr
+            self.pointr = PoinTr(
+                dict2namespace(
+                    yaml.safe_load(
+                        open('other_models/im_pc_pointr_2/PoinTr.yaml'))['model']))
 
         if ('snowflake' in self.model_lists):
             from snowflake.model import SnowflakeNet
@@ -259,6 +326,37 @@ class Network(nn.Module):
             imgs_feat = torch.reshape(imgs_feat, (part.shape[0], 1, 1024))
             pcd_disp = self.disp_dec([imgs_feat])
 
+        if ('im_pc_disp3d' in self.model_lists):
+            imgs_feat = self.encoder_img(images)
+            # torch.Size([batch, 16, 256, 4, 4])
+            imgs_feat = torch.max(imgs_feat, dim=1, keepdim=True).values
+            imgs_feat = torch.max(imgs_feat, dim=4, keepdim=False).values  # GY added
+            imgs_feat = torch.reshape(imgs_feat, (part.shape[0], 1024, 1))  # GY added
+            imgs_feat = imgs_feat.permute(0, 2, 1) # GY added
+
+            disp_feat, pcd_anchors = self.disp_enc(part.transpose(1, 2))
+            global_f = torch.cat((imgs_feat, disp_feat),dim=1)
+            global_f = torch.max(global_f, dim=1, keepdim=True).values
+            pcd_disp = self.disp_dec([global_f])
+            if self.do_segment is True:
+                seg_disp = self.disp_seg(pcd_disp)
+
+        if ('im_pc_disp3d_trans' in self.model_lists):
+            imgs_feat = self.encoder_img(images)
+            num_frames = images.shape[1]
+            # torch.Size([batch, 16, 256, 4, 4])
+            imgs_feat = imgs_feat.transpose(1, 2)
+            imgs_feat = torch.reshape(imgs_feat,
+                                      (part.shape[0], self.disp_pointr.trans_dim_img, num_frames * 4 * 4))
+
+            # disp_feat, pcd_anchors = self.disp_enc(part.transpose(1, 2))
+            # global_f = torch.cat((imgs_feat, disp_feat),dim=1)
+            # global_f = torch.max(global_f, dim=1, keepdim=True).values
+            # pcd_disp = self.disp_dec([global_f])
+            pcd_disp = self.disp_pointr(imgs_feat.transpose(1, 2),part.transpose(1, 2))
+            if self.do_segment is True:
+                seg_disp = self.disp_seg(pcd_disp)
+
         if ('vrcnet' in self.model_lists):
             # pcd_vrcnet_coarse, pcd_vrcnet_fine, pcd_vrcnet_3, pcd_vrcnet_4 = self.vrcnet(part)['out1'], self.vrcnet(part)['out2'], self.vrcnet(part)['out3'], self.vrcnet(part)['out4']
             pcd_vrcnet_coarse, pcd_vrcnet_fine, pcd_vrcnet_3, pcd_vrcnet_4 = self.vrcnet(
@@ -269,26 +367,57 @@ class Network(nn.Module):
             pcd_pointr = self.pointr(part.transpose(1, 2))
         if ('im_pointr' in self.model_lists):
             imgs_feats = []
-            num_frames = 16
-            """
-            for i in range(num_frames):
-                imgs_feat = self.encoder_img(images[:,i,:,:,:].transpose(1, 3))
-                imgs_feats.append(imgs_feat)
-            imgs_feat = torch.stack(imgs_feats)
-                # shape [2, 1024, 4, 4]
-            imgs_feat = torch.reshape(imgs_feat, (part.shape[0], 256, num_frames * 4 * 4))
-            """
+            num_frames = images.shape[1]
             # NOTE encoding with ResNet
             imgs_feat = self.encoder_img(images)
-            # torch.Size([batch, 16, 256, 4, 4])
 
+            # torch.Size([batch, 16, 256, 4, 4])
             imgs_feat = imgs_feat.transpose(1, 2)
             # NOTE reshape for PE feature
             imgs_feat = torch.reshape(imgs_feat,
-                                      (part.shape[0], 256, num_frames * 2 * 2))
-            # torch.Size([batch, 15*16, 256])
+                                      (part.shape[0], 256, num_frames * 4 * 4))
 
+            # torch.Size([batch, 15*16, 256])
             pcd_pointr = self.pointr(imgs_feat.transpose(1, 2))
+
+        if ('im_pc_pointr' in self.model_lists):
+            imgs_feats = []
+            num_frames = images.shape[1]
+            # NOTE encoding with ResNet
+            imgs_feat = self.encoder_img(images)
+
+            # torch.Size([batch, 16, 384, 4, 4])
+            imgs_feat = imgs_feat.transpose(1, 2)
+
+            # NOTE reshape for PE feature
+            # imgs_feat = torch.reshape(imgs_feat,
+            #                           (part.shape[0], 256, num_frames * 4 * 4))
+            imgs_feat = torch.reshape(imgs_feat,
+                                        (part.shape[0], self.pointr.trans_dim_img, num_frames * 4 * 4))
+
+
+            # torch.Size([batch, 15*16, 256])
+            pc_ = self.pointr(imgs_feat.transpose(1, 2), part.transpose(1, 2))
+
+        if ('im_pc_pointr_2' in self.model_lists):
+            imgs_feats = []
+            num_frames = images.shape[1]
+            # NOTE encoding with ResNet
+            imgs_feat = self.encoder_img(images)
+
+            # torch.Size([batch, 16, 384, 4, 4])
+            imgs_feat = imgs_feat.transpose(1, 2)
+
+            # NOTE reshape for PE feature
+            # imgs_feat = torch.reshape(imgs_feat,
+            #                           (part.shape[0], 256, num_frames * 4 * 4))
+            imgs_feat = torch.reshape(imgs_feat,
+                                        (part.shape[0], self.pointr.trans_dim_img, num_frames * 4 * 4))
+
+
+            # torch.Size([batch, 15*16, 256])
+            pc_img, pc_pc = self.pointr(imgs_feat.transpose(1, 2), part.transpose(1, 2))
+
 
         if ('snowflake' in self.model_lists):
             pcd_snowflake = self.snowflake(point_cloud=part.transpose(1, 2))
@@ -323,10 +452,12 @@ class Network(nn.Module):
             'shapegf' in self.model_lists) else []
         output['pcn'] = [pcn_coarse, pcn_fine
                          ] if ('pcn' in self.model_lists) else []
-        output['disp3d'] = [pcd_disp
-                              ] if ('disp3d' in self.model_lists) else []
-        output['im_disp3d'] = [pcd_disp] if (
-            'im_disp3d' in self.model_lists) else []
+        output['disp3d'] = [pcd_disp] if ('disp3d' in self.model_lists) else []
+        output['im_disp3d'] = [pcd_disp
+                               ] if ('im_disp3d' in self.model_lists) else []
+        output['im_pc_disp3d'] = [pcd_disp] if ('im_pc_disp3d' in self.model_lists) else []
+        output['im_pc_disp3d_trans'] = [pcd_disp[0], pcd_disp[1], pcd_disp[2]
+                               ] if ('im_pc_disp3d_trans' in self.model_lists) else []
         output['vrcnet'] = [
             pcd_vrcnet_coarse, pcd_vrcnet_fine, pcd_vrcnet_3, pcd_vrcnet_4
         ] if ('vrcnet' in self.model_lists) else []
@@ -334,6 +465,10 @@ class Network(nn.Module):
                             ] if ('pointr' in self.model_lists) else []
         output['im_pointr'] = [pcd_pointr[0], pcd_pointr[1]
                                ] if ('im_pointr' in self.model_lists) else []
+        output['im_pc_pointr'] = [pc_[0], pc_[1], pc_[2]
+                               ] if ('im_pc_pointr' in self.model_lists) else []
+        output['im_pc_pointr_2'] = [[pc_img[0], pc_img[1]], [pc_pc[0], pc_pc[1], pc_pc[2]]
+                                  ] if ('im_pc_pointr_2' in self.model_lists) else []
         output['snowflake'] = pcd_snowflake if (
             'snowflake' in self.model_lists) else []
         output['im_snowflake'] = [pcd_snowflake] if (

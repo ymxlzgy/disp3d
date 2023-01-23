@@ -52,6 +52,11 @@ def main():
         default="shapenet",
         help='dataset for evaluation')
     parser.add_argument(
+        '--cat',
+        type=str,
+        default="car",
+        help='category for evaluation')
+    parser.add_argument(
         '--methods',
         nargs='+',
         default=['softpool', 'msn', 'folding', 'grnet'],
@@ -80,6 +85,11 @@ def main():
             model_list = [line.strip().replace('/', '/') for line in file]
         part_dir = "/media/wangyida/HDD/database/SUNCG_Yida/test/pcd_partial/"
         gt_dir = "/media/wangyida/HDD/database/SUNCG_Yida/test/pcd_complete/"
+    elif opt.dataset == 'nyu':
+        with open(os.path.join('./list_pcd/valid_nyu.list')) as file:
+            model_list = [line.strip().replace('/', '/') for line in file]
+        part_dir = "/media/wangyida/HDD/database/SUNCG_Yida/train/pcd_partial/"
+        gt_dir = "/media/wangyida/HDD/database/SUNCG_Yida/train/pcd_complete/"
     elif opt.dataset == 'fusion':
         with open(os.path.join('./list_pcd/test_fusion_few.list')) as file:
             model_list = [line.strip().replace('/', '/') for line in file]
@@ -101,21 +111,25 @@ def main():
         if complete3d_benchmark == True:
             with open(os.path.join('./list_pcd/test_shapenet.list')) as file:
                 model_list = [line.strip().replace('/', '/') for line in file]
-            part_dir = "/media/wangyida/HDD/database/shapenet/test/partial/"
-            gt_dir = "/media/wangyida/HDD/database/shapenet/test/partial/"
+            part_dir = "/media/student/Data/guangyao/shapenet/test/partial/"
+            gt_dir = "/media/student/Data/guangyao/shapenet/test/partial/"
         else:
+
             # with open(os.path.join('./list_pcd/valid_shapenet_eccv.list')) as file:
             # with open(os.path.join('./list_pcd/thesis_teaser_shapenet.list')) as file:
-            with open(os.path.join('./list_pcd/visual_shapenet_cvpr.list')) as file:
+            # with open(os.path.join('./list_pcd/visual_shapenet_cvpr.list')) as file:
             # with open(os.path.join('./list_pcd/valid_shapenet_lamp.list')) as file:
-            # with open(os.path.join('./list_pcd/valid_shapenet.list')) as file:
+            # with open(os.path.join('./list_pcd/valid_shapenet_table.list')) as file:
+            list_val = './list_pcd/valid_shapenet_{}.list'.format(opt.cat)
+            with open(os.path.join(list_val)) as file:
+                # with open(os.path.join('./list_pcd/valid_shapenet.list')) as file:
                 # with open(os.path.join('./list_pcd/visual_shapenet_rear.list')) as file:
                 # with open(os.path.join('./list_pcd/visual_shapenet_temp.list')) as file:
                 # with open(os.path.join('./list_pcd/valid_shapenet_failure.list')) as file:
                 model_list = [line.strip().replace('/', '/') for line in file]
-            part_dir = "/media/wangyida/HDD/database/shapenet/val/partial/"
+            part_dir = "/media/student/Data/guangyao/yida_tmp/shapenet/val/partial/"
             # part_dir = "/media/wangyida/HDD/database/shapenet/val/gt/"
-            gt_dir = "/media/wangyida/HDD/database/shapenet16384/val/gt/"
+            gt_dir = "/media/student/Data/guangyao/yida_tmp/shapenet16384/val/gt/"
             """
             part_dir = "./pcds_thesis_teaser/"
             gt_dir = "./pcds_thesis_teaser/"
@@ -124,7 +138,7 @@ def main():
     with torch.no_grad():
         for i, model in enumerate(model_list):
             print(model)
-            if opt.dataset == 'suncg' or opt.dataset == 'eye':
+            if opt.dataset == 'suncg' or opt.dataset == 'eye' or opt.dataset == 'nyu':
                 subfold = 'all_samples'
             else:
                 subfold = model[:model.rfind('/')]
@@ -132,7 +146,7 @@ def main():
                                        device='cuda')
 
             images_mv = []
-            if opt.dataset == 'suncg' or opt.dataset == 'fusion' or opt.dataset == '3rscan' or opt.dataset == 'eye':
+            if opt.dataset == 'suncg' or opt.dataset == 'fusion' or opt.dataset == '3rscan' or opt.dataset == 'eye' or opt.dataset == 'nyu':
                 if opt.dataset == '3rscan' or opt.dataset == 'eye':
                     suffix = '.ply'
                 else:
@@ -147,6 +161,14 @@ def main():
 
                 gt, idx_sampled = resample_pcd(gt_tmp, int(opt.npoints[1]))
                 gt_seg = np.round(gt_color[idx_sampled] * 11)
+                ################
+
+                from other_tools.dataloader import read_images
+                images_mv = read_images(model, num_frames=1, dataset='nyu')
+                images_mv = torch.unsqueeze(
+                    torch.tensor(images_mv[:, :, :, :3]), 0).cuda()
+
+                ################
             elif opt.dataset == 'shapenet':
                 start = time()
                 part_tmp, part_color = read_points(
@@ -167,44 +189,8 @@ def main():
                 gt_seg = np.round(gt_color[idx_sampled] * 11)
                 ################
 
-                file_views = os.listdir(
-                    os.path.join("/media/wangyida/HDD/database/ShapeNet_RGBs/",
-                                 '%s' % model, "rendering"))
-                total_views = len(file_views)
-                rendering_image_indexes = range(total_views)
-                cnt_images = 0
                 from other_tools.dataloader import read_images
-                images_mv = read_images(model)[:, :, :, :3]
-                images_mv = images_mv[:, 5: 5+128, 5: 5+128, :]
-                """
-                for image_idx in rendering_image_indexes:
-                    if file_views[image_idx][-3:] == 'png':
-                        # 16 images per object
-                        num_frames = 16
-                        if cnt_images == num_frames:
-                            break
-                        else:
-                            cnt_images += 1
-                        rendering_image = cv2.imread(
-                            os.path.join(
-                                "/media/wangyida/HDD/database/ShapeNet_RGBs/",
-                                '%s' % model, "rendering",
-                                file_views[image_idx]),
-                            cv2.IMREAD_UNCHANGED).astype(np.float32) / 255.
-                        rendering_image = rendering_image[5: 5+128, 5: 5+128, :]
-                        os.makedirs('./pcds/images', exist_ok=True)
-                        os.makedirs('./pcds/images/' + subfold, exist_ok=True)
-                        cv2.imwrite(
-                            os.path.join('pcds/images', model) +
-                            '-%s' % image_idx + '.png', rendering_image * 255.)
-                        if len(rendering_image.shape) < 3:
-                            logging.error(
-                                'It seems that there is something wrong with the image file %s'
-                                % (image_path))
-                            sys.exit(2)
-                        images_mv.append(rendering_image)
-                images_mv = np.asarray(images_mv)
-                """
+                images_mv = read_images(model)
                 images_mv = torch.unsqueeze(
                     torch.tensor(images_mv[:, :, :, :3]), 0).cuda()
 
@@ -223,8 +209,7 @@ def main():
             gt = (gt - sample_mean) / sample_scale
 
             # output = network(part.transpose(2, 1).contiguous())
-            output = network(
-                part=part.transpose(2, 1), images=images_mv)
+            output = network(part=part.transpose(2, 1), images=images_mv)
 
             if output['shapegf']:
                 output['shapegf'] = output['shapegf'].reconstruct(part)
@@ -305,6 +290,14 @@ def main():
                 else:
                     hash_tab[str(subfold)]['chamfer_dist'] += 0
 
+                if output['im_pc_disp3d']:
+                    _, dist, _, _ = CD.forward(
+                        input1=output['im_pc_disp3d'][0], input2=gt)
+                    chamfer_dist = dist.mean() * 1e4
+                    hash_tab[str(subfold)]['chamfer_dist'] += chamfer_dist
+                else:
+                    hash_tab[str(subfold)]['chamfer_dist'] += 0
+
                 if output['vrcnet']:
                     _, dist, _, _ = CD.forward(
                         input1=output['vrcnet'][0], input2=gt)
@@ -324,6 +317,14 @@ def main():
                 if output['im_pointr']:
                     dist1, dist2, _, _ = CD.forward(
                         input1=output['im_pointr'][1], input2=gt)
+                    chamfer_dist = (dist1.mean() + dist2.mean()) / 2 * 1e4
+                    hash_tab[str(subfold)]['chamfer_dist'] += chamfer_dist
+                else:
+                    hash_tab[str(subfold)]['chamfer_dist'] += 0
+
+                if output['im_pc_pointr']:
+                    dist1, dist2, _, _ = CD.forward(
+                        input1=output['im_pc_pointr'][2], input2=gt)
                     chamfer_dist = (dist1.mean() + dist2.mean()) / 2 * 1e4
                     hash_tab[str(subfold)]['chamfer_dist'] += chamfer_dist
                 else:
@@ -353,7 +354,7 @@ def main():
                     % (i + 1, len(model_list), chamfer_dist.item(),
                        hash_tab[str(subfold)]['chamfer_dist'] /
                        hash_tab[str(subfold)]['cnt']))
-            if opt.dataset == 'suncg' or opt.dataset == 'eye':
+            if opt.dataset == 'suncg' or opt.dataset == 'eye' or opt.dataset == 'nyu':
                 model = 'all_samples/' + model
 
             # save input
@@ -364,6 +365,9 @@ def main():
                 gt_seg=gt_seg,
                 dataset=opt.dataset)
             """
+            pts_color = colormap.colormap(
+                part[0] * sample_scale.data + sample_mean.data,
+                dataset=opt.dataset)
             """
             points_save.points_save(
                 points=pts_coord,
@@ -388,8 +392,8 @@ def main():
                 root='pcds/z_gt',
                 child=subfold,
                 pfile=model)
-            
-            # save a volumeitrc version 
+
+            # save a volumeitrc version
             pcd_voxel = o3d.geometry.PointCloud()
             pcd_voxel.points = o3d.utility.Vector3dVector(pts_coord.numpy())
             pcd_voxel.colors = o3d.utility.Vector3dVector(pts_color)
@@ -400,7 +404,6 @@ def main():
                 root='pcds/z_gt_vox',
                 child=subfold,
                 pfile=model)
-
 
             if opt.dataset == 'eye':
                 # save points2surf
@@ -537,6 +540,7 @@ def main():
                             sample_mean.data,
                             gt=gt,
                             gt_seg=gt_seg,
+                            with_fp=True,
                             dataset=opt.dataset)
                     points_save.points_save(
                         points=pts_coord,
@@ -644,8 +648,7 @@ def main():
                         pfile=model + '-' + str(stage))
 
                 # save voxels
-                voxels = torch.flip(
-                    output['im_grnet'][2][0, 0, :, :, :], [0])
+                voxels = torch.flip(output['im_grnet'][2][0, 0, :, :, :], [0])
                 voxels = np.array(voxels.cpu())
                 import mcubes
                 vertices, triangles = mcubes.marching_cubes(voxels, 0)
@@ -709,6 +712,7 @@ def main():
                         sample_mean.data,
                         gt=gt,
                         gt_seg=gt_seg,
+                        with_fp=True,
                         dataset=opt.dataset)
                     points_save.points_save(
                         points=pts_coord,
@@ -799,6 +803,47 @@ def main():
                                 child=subfold,
                                 pfile=model + '-' + str(stage) + '-' + str(part))
                     """
+            if output['im_pc_disp3d']:
+                # save output['disp3d']
+                for stage in range(len(output['im_pc_disp3d'])):
+                    pts_coord = output['im_pc_disp3d'][stage][0].data.cpu(
+                    )[:, 0:3]
+                    if opt.dataset == '3rscan':
+                        pts_coord *= sample_scale[0].data.cpu()
+                        pts_coord += sample_mean[0].data.cpu()
+                    """
+                    labels_for_points = label_points.label_points(
+                        npoints=int(opt.npoints[1]),
+                        divisions=16)
+                    maxi = labels_for_points.max()
+                    pts_color = matplotlib.cm.gist_rainbow(
+                        labels_for_points[0:output['disp3d'][stage].size(1)]
+                        / maxi)[:, 0:3]
+                    """
+                    pts_color = colormap.colormap(
+                        output['im_pc_disp3d'][stage][0] * sample_scale.data +
+                        sample_mean.data,
+                        gt=gt,
+                        gt_seg=gt_seg,
+                        dataset=opt.dataset)
+                    """
+                    """
+                    points_save.points_save(
+                        points=pts_coord,
+                        colors=pts_color,
+                        root='pcds/im_pc_disp3d',
+                        child=subfold,
+                        pfile=model + '-' + str(stage))
+                    """
+                    if stage == 0:
+                        for part in range(4096 // 64):
+                            points_save.points_save(
+                                points=pts_coord[64*part:64*part+64],
+                                colors=pts_color[64*part:64*part+64],
+                                root='pcds/disp3d',
+                                child=subfold,
+                                pfile=model + '-' + str(stage) + '-' + str(part))
+                    """
 
             if output['vrcnet']:
                 # for stage in range(len(output['vrcnet'])):
@@ -810,11 +855,10 @@ def main():
                     pts_color = colormap.colormap(
                         output['vrcnet'][stage][0] * sample_scale.data +
                         sample_mean.data,
-                        dataset=opt.dataset)
-                    """
                         gt=gt,
                         gt_seg=gt_seg,
-                    """
+                        with_fp=False,
+                        dataset=opt.dataset)
                     points_save.points_save(
                         points=pts_coord,
                         colors=pts_color,
@@ -830,8 +874,8 @@ def main():
                         f.create_dataset("data", data=np.float32(pts_coord))
 
             if output['pointr']:
-                for stage in range(len(output['pointr'])):
-                    # for stage in range(2):
+                # for stage in range(len(output['pointr'])):
+                for stage in range(2):
                     pts_coord = output['pointr'][stage][0].data.cpu()[:, 0:3]
                     if opt.dataset == '3rscan':
                         pts_coord *= sample_scale[0].data.cpu()
@@ -842,17 +886,14 @@ def main():
                         gt=gt,
                         gt_seg=gt_seg,
                         dataset=opt.dataset)
+                    pts_color_fp = colormap.colormap(
+                        output['pointr'][stage][0] * sample_scale.data +
+                        sample_mean.data,
+                        gt=gt,
+                        gt_seg=gt_seg,
+                        dataset=opt.dataset,
+                        with_fp=True)
                     if stage == 0:
-                        """
-                        npoint = output['pointr'][stage].size(1)
-                        labels_for_points = label_points.label_points(
-                            npoints=npoint,
-                            divisions=npoint)
-                        maxi = labels_for_points.max()
-                        pts_color = matplotlib.cm.cool(
-                            labels_for_points[0:npoint]
-                            / maxi)[:, 0:3]
-                        """
                         pts_coord = pts_coord[:224, :]
                         pts_color = pts_color[:224, :]
                     points_save.points_save(
@@ -861,6 +902,13 @@ def main():
                         root='pcds/pointr',
                         child=subfold,
                         pfile=model + '-' + str(stage))
+                    if stage == 1:
+                        points_save.points_save(
+                            points=pts_coord,
+                            colors=pts_color_fp,
+                            root='pcds/pointr_fp',
+                            child=subfold,
+                            pfile=model + '-' + str(stage))
 
             if output['im_pointr']:
                 # for stage in range(3, len(output['im_pointr'])):
@@ -876,12 +924,62 @@ def main():
                         gt=gt,
                         gt_seg=gt_seg,
                         dataset=opt.dataset)
+                    pts_color_fp = colormap.colormap(
+                        output['im_pointr'][stage][0] * sample_scale.data +
+                        sample_mean.data,
+                        gt=gt,
+                        gt_seg=gt_seg,
+                        dataset=opt.dataset,
+                        with_fp=True)
                     points_save.points_save(
                         points=pts_coord,
                         colors=pts_color,
                         root='pcds/im_pointr',
                         child=subfold,
                         pfile=model + '-' + str(stage))
+                    points_save.points_save(
+                        points=pts_coord,
+                        colors=pts_color_fp,
+                        root='pcds/im_pointr_fp',
+                        child=subfold,
+                        pfile=model + '-' + str(stage))
+
+            if output['im_pc_pointr']:
+                # for stage in range(len(output['pointr'])):
+                for stage in range(3):
+                    pts_coord = output['im_pc_pointr'][stage][0].data.cpu()[:, 0:3]
+                    if opt.dataset == '3rscan':
+                        pts_coord *= sample_scale[0].data.cpu()
+                        pts_coord += sample_mean[0].data.cpu()
+                    pts_color = colormap.colormap(
+                        output['im_pc_pointr'][stage][0] * sample_scale.data +
+                        sample_mean.data,
+                        gt=gt,
+                        gt_seg=gt_seg,
+                        dataset=opt.dataset)
+                    pts_color_fp = colormap.colormap(
+                        output['im_pc_pointr'][stage][0] * sample_scale.data +
+                        sample_mean.data,
+                        gt=gt,
+                        gt_seg=gt_seg,
+                        dataset=opt.dataset,
+                        with_fp=True)
+                    if stage == 0:
+                        pts_coord = pts_coord[:224, :]
+                        pts_color = pts_color[:224, :]
+                    points_save.points_save(
+                        points=pts_coord,
+                        colors=pts_color,
+                        root='pcds/im_pc_pointr',
+                        child=subfold,
+                        pfile=model + '-' + str(stage))
+                    if stage == 1:
+                        points_save.points_save(
+                            points=pts_coord,
+                            colors=pts_color_fp,
+                            root='pcds/im_pc_pointr_fp',
+                            child=subfold,
+                            pfile=model + '-' + str(stage))
 
             if output['snowflake']:
                 for stage in range(3, len(output['snowflake'])):
@@ -905,7 +1003,6 @@ def main():
                         root='pcds/snowflake',
                         child=subfold,
                         pfile=model + '-' + str(stage))
-
             """
             if output['im_snowflake']:
                 for stage in range(len(output['im_snowflake'])):
@@ -932,14 +1029,14 @@ def main():
             if output['im_snowflake']:
                 for source in range(len(output['im_snowflake'])):
                     for stage in range(len(output['im_snowflake'][source])):
-                        pts_coord = output['im_snowflake'][source][stage][0].data.cpu(
-                        )[:, 0:3]
+                        pts_coord = output['im_snowflake'][source][stage][
+                            0].data.cpu()[:, 0:3]
                         if opt.dataset == '3rscan':
                             pts_coord *= sample_scale[0].data.cpu()
                             pts_coord += sample_mean[0].data.cpu()
                         pts_color = colormap.colormap(
-                            output['im_snowflake'][source][stage][0] * sample_scale.data +
-                            sample_mean.data,
+                            output['im_snowflake'][source][stage][0] *
+                            sample_scale.data + sample_mean.data,
                             gt=gt,
                             gt_seg=gt_seg,
                             dataset=opt.dataset)

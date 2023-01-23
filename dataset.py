@@ -16,6 +16,8 @@ class ShapeNet(data.Dataset):
         if train:
             if self.dataset == 'suncg':
                 self.list_path = './list_pcd/train_suncg.list'
+            elif self.dataset == 'nyu':
+                self.list_path = './list_pcd/train_nyu.list'
             elif self.dataset == 'fusion':
                 self.list_path = './list_pcd/train_fusion.list'
             elif self.dataset == '3rscan':
@@ -27,6 +29,8 @@ class ShapeNet(data.Dataset):
         else:
             if self.dataset == 'suncg':
                 self.list_path = './list_pcd/valid_suncg.list'
+            elif self.dataset == 'nyu':
+                self.list_path = './list_pcd/valid_nyu.list'
             elif self.dataset == 'fusion':
                 self.list_path = './list_pcd/test_fusion.list'
             elif self.dataset == '3rscan':
@@ -48,7 +52,7 @@ class ShapeNet(data.Dataset):
         scan_id = index
 
         if self.train:
-            if self.dataset == 'suncg':
+            if self.dataset == 'suncg' or self.dataset == 'nyu':
                 part, part_color = read_points(
                     os.path.join(
                         "/media/wangyida/HDD/database/SUNCG_Yida/train/pcd_partial/",
@@ -57,6 +61,7 @@ class ShapeNet(data.Dataset):
                     os.path.join(
                         "/media/wangyida/HDD/database/SUNCG_Yida/train/pcd_complete/",
                         '%s.pcd' % model_id), self.dataset)
+                images = read_images(model_id, num_frames=1, dataset='nyu')
             elif self.dataset == 'fusion':
                 part, part_color = read_points(
                     os.path.join(
@@ -88,15 +93,15 @@ class ShapeNet(data.Dataset):
             elif self.dataset == 'shapenet':
                 part, part_color = read_points(
                     os.path.join(
-                        "/media/wangyida/HDD/database/shapenet/train/partial/",
+                        "/data/guangyao/shapenet/train/partial/",
                         '%s.h5' % model_id), self.dataset)
                 comp, comp_color = read_points(
                     os.path.join(
-                        "/media/wangyida/HDD/database/shapenet/train/gt/",
+                        "/data/guangyao/shapenet/train/gt/",
                         '%s.h5' % model_id), self.dataset)
-                images = read_images(model_id)[:, :, :, :3]
+                images = read_images(model_id)  # [:, :, :, :3]
         else:
-            if self.dataset == 'suncg':
+            if self.dataset == 'suncg' or self.dataset == 'nyu':
                 part, part_color = read_points(
                     os.path.join(
                         "/media/wangyida/HDD/database/SUNCG_Yida/test/pcd_partial/",
@@ -105,6 +110,7 @@ class ShapeNet(data.Dataset):
                     os.path.join(
                         "/media/wangyida/HDD/database/SUNCG_Yida/test/pcd_complete/",
                         '%s.pcd' % model_id), self.dataset)
+                images = read_images(model_id, num_frames=1, dataset='nyu')
             elif self.dataset == 'fusion':
                 part, part_color = read_points(
                     os.path.join(
@@ -136,11 +142,11 @@ class ShapeNet(data.Dataset):
             elif self.dataset == 'shapenet':
                 part, part_color = read_points(
                     os.path.join(
-                        "/media/wangyida/HDD/database/shapenet/val/partial/",
+                        "/data/guangyao/shapenet/val/partial/",
                         '%s.h5' % model_id), self.dataset)
                 comp, comp_color = read_points(
                     os.path.join(
-                        "/media/wangyida/HDD/database/shapenet/val/gt/",
+                        "/data/guangyao/shapenet/val/gt/",
                         '%s.h5' % model_id), self.dataset)
                 images = read_images(model_id)[:, :, :, :3]
 

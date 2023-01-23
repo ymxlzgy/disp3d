@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from displace.tree import TreeGCN
+from other_models.displace.tree import TreeGCN
 
 from math import ceil
 

@@ -2,8 +2,7 @@ import open3d as o3d
 import argparse
 import random
 import numpy as np
-import torch.nn as nn
-import torch.nn.functional as func
+import torch
 import torch.optim as optim
 import sys
 from dataset import *
@@ -24,13 +23,13 @@ sys.path.append("./distance/chamfer_multidim")
 from chamfer3D import dist_chamfer_3D as cd
 from dataset import resample_pcd
 
+
 class ModelOptimizer(nn.Module):
     def __init__(self, model):
         super(ModelOptimizer, self).__init__()
         self.model = model
         self.EMD = emd.emdModule()
         self.CD = cd.chamfer_3DDist()  # cd.chamferDist()
-        self.l2_loss = nn.MSELoss(reduction='mean')
 
     def forward(self, part, gt, part_seg, gt_seg, images):
         eps = 0.005
@@ -164,19 +163,19 @@ class ModelOptimizer(nn.Module):
             loss_points += cdist
 
         if output['im_pc_disp3d']:
-
-            dist1, dist2, _, _ = self.CD(output['im_pc_disp3d'][0], gt)
+            """
+            dist1, dist2, _, _ = self.CD(output['disp3d'][0], gt)
             cdist = torch.mean(dist1, 1) + torch.mean(dist2, 1)
             # NOTE: original 3D input
-
-            # dist, _ = self.EMD(output['im_pc_disp3d'][0], gt, eps, iters)
-            # cdist = torch.sqrt(dist).mean(1)
-            # enforce_sequence = False
-            # if enforce_sequence is True:
-            #     dist, _ = self.EMD(
-            #         output['im_pc_disp3d'][0][:, :output['im_pc_disp3d'][0].shape[1] //
-            #                             2, :], part, eps, iters)
-            #     cdist += torch.sqrt(dist).mean(1)
+            """
+            dist, _ = self.EMD(output['im_pc_disp3d'][0], gt, eps, iters)
+            cdist = torch.sqrt(dist).mean(1)
+            enforce_sequence = False
+            if enforce_sequence is True:
+                dist, _ = self.EMD(
+                    output['im_pc_disp3d'][0][:, :output['im_pc_disp3d'][0].shape[1] //
+                                        2, :], part, eps, iters)
+                cdist += torch.sqrt(dist).mean(1)
             """
             SM = torch.nn.Softmax(dim=-1)
             sem_feat = SM(output['disp3d'][1][:, :, :]).float()
@@ -203,16 +202,6 @@ class ModelOptimizer(nn.Module):
             dist, _ = self.EMD(output['im_disp3d'][0], gt, eps, iters)
             cdist = torch.sqrt(dist).mean(1)
 
-            cdist = cdist.mean(0)
-            loss_points += cdist
-
-        if output['im_pc_disp3d_trans']:
-            dist1, dist2, _, _ = self.CD(output['im_pc_disp3d_trans'][0], gt)
-            cdist = torch.mean(dist1, 1) + torch.mean(dist2, 1)
-            dist1, dist2, _, _ = self.CD(output['im_pc_disp3d_trans'][1], gt)
-            cdist += torch.mean(dist1, 1) + torch.mean(dist2, 1)
-            dist1, dist2, _, _ = self.CD(output['im_pc_disp3d_trans'][2], gt)
-            cdist += torch.mean(dist1, 1) + torch.mean(dist2, 1)
             cdist = cdist.mean(0)
             loss_points += cdist
 
@@ -266,29 +255,6 @@ class ModelOptimizer(nn.Module):
             cdist += torch.mean(dist1, 1) + torch.mean(dist2, 1)
             cdist = cdist.mean(0)
             loss_points += cdist
-
-        if output['im_pc_pointr_2']:
-            coase_img_pc, refine_img_pc = output['im_pc_pointr_2'][0]
-            dist1, dist2, _, _ = self.CD(coase_img_pc, gt)
-            cdist_img = torch.mean(dist1, 1) + torch.mean(dist2, 1)
-            dist1, dist2, _, _ = self.CD(refine_img_pc, gt)
-            cdist_img += torch.mean(dist1, 1) + torch.mean(dist2, 1)
-            cdist_img = cdist_img.mean(0)
-            loss_points += cdist_img
-
-            coase_pc_pc, refine_pc_pc1, refine_pc_pc2 = output['im_pc_pointr_2'][1]
-            dist1, dist2, _, _ = self.CD(coase_pc_pc, gt)
-            cdist_pc = torch.mean(dist1, 1) + torch.mean(dist2, 1)
-            dist1, dist2, _, _ = self.CD(refine_pc_pc1, gt)
-            cdist_pc += torch.mean(dist1, 1) + torch.mean(dist2, 1)
-            dist1, dist2, _, _ = self.CD(refine_pc_pc2, gt)
-            cdist_pc += torch.mean(dist1, 1) + torch.mean(dist2, 1)
-            cdist_pc = cdist_pc.mean(0)
-            loss_points += cdist_pc
-            cdist = cdist_pc
-
-            consisnt_loss = self.l2_loss(refine_img_pc, refine_pc_pc1)
-            loss_others += consisnt_loss
 
         if output['snowflake']:
             dist1, dist2, _, _ = self.CD(output['snowflake'][0], gt)
@@ -348,17 +314,12 @@ def main():
         '--workers',
         type=int,
         help='number of data loading workers',
-        default=2)
+        default=12)
     parser.add_argument(
         '--nepoch',
         type=int,
         default=750,
         help='number of epochs to train for')
-    parser.add_argument(
-        '--gpu',
-        type=int,
-        default=0,
-        help='gpu')
     parser.add_argument(
         '--model', type=str, default='', help='optional reload model path')
     parser.add_argument(
@@ -424,7 +385,7 @@ def main():
         npoints=int(opt.npoints[1]),
         n_regions=opt.n_regions,
         model_lists=opt.methods)
-    network = torch.nn.DataParallel(ModelOptimizer(network), device_ids=[opt.gpu])
+    network = torch.nn.DataParallel(ModelOptimizer(network))
     network.cuda()
     # network.module.model.apply(weights_init)  #initialization of the weight
 
@@ -432,7 +393,7 @@ def main():
         network.module.model.load_state_dict(torch.load(opt.model))
         print("Previous weight loaded ")
 
-    lrate = 1e-4
+    lrate = 1e-5
     # 1e-3 for shapeGF
     # lrate = 1e-3
     optimizer = optim.Adam(
@@ -456,18 +417,17 @@ def main():
     labels_generated_points = (labels_generated_points) % (opt.n_regions + 1)
     labels_generated_points = labels_generated_points.contiguous().view(-1)
     global_step = 0
-    evaluate_step = 0
     for epoch in range(opt.nepoch):
         #TRAIN MODE
         # train_loss.reset()
         network.module.model.train()
 
         # learning rate schedule
-        if epoch == 20:
+        if epoch == 10:
             lrate /= 10.0
             optimizer = optim.Adam(
                 network.module.model.parameters(), lr=lrate)
-        if epoch == 30:
+        if epoch == 25:
             lrate /= 10.0
             optimizer = optim.Adam(
                 network.module.model.parameters(), lr=lrate)
@@ -491,7 +451,8 @@ def main():
 
             if opt.methods[0] == 'shapegf':
                 part = part.transpose(1, 2)
-            cdist, loss_points, loss_others = network(part.transpose(1, 2), gt, part_seg, gt_seg, images)
+            cdist, loss_points, loss_others = network(
+                part.transpose(1, 2), gt, part_seg, gt_seg, images)
 
             loss_all = loss_points + loss_others
             # loss_all.backward() # single GPU
@@ -503,9 +464,7 @@ def main():
                 idx = random.randint(0, part.size()[0] - 1)
             # print((epoch*len_dataset/opt.batchSize+i) % 300)
             if global_step % 100 == 0 or global_step == 0:
-                writer.add_scalar('all_loss', loss_all * 1e4, global_step)
-                writer.add_scalar('cd_loss', cdist * 1e4, global_step)
-                writer.add_scalar('l2_loss', loss_others, global_step)
+                writer.add_scalar('loss', loss_all, global_step)
                 writer.add_scalar('learning_rate', lrate, global_step)
                 writer.flush()
             if (epoch * len_dataset + i) % 300 == 0 or i == 0:
@@ -524,7 +483,7 @@ def main():
         # train_curve.append(train_loss.avg)
 
         # VALIDATION
-        if epoch % 4 == 0:
+        if epoch % 200 == 199:
             val_loss.reset()
             network.module.model.eval()
             with torch.no_grad():
@@ -541,11 +500,7 @@ def main():
                     idx = random.randint(0, part.size()[0] - 1)
                     print(opt.methods[0] + ' val [%d: %d/%d]  chamfer: %.2f' %
                           (epoch, i, len_dataset / opt.batchSize,
-                           chamfer_dist.mean().item()* 1e4))
-                    if evaluate_step % 100 == 0 or evaluate_step == 0:
-                        writer.add_scalar('val_loss', chamfer_dist.mean().item()* 1e4, evaluate_step)
-                        writer.flush()
-                    evaluate_step += 1
+                           chamfer_dist.mean().item()))
 
 
 if __name__ == "__main__":

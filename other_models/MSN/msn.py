@@ -83,7 +83,7 @@ class PointNetRes(nn.Module):
 
 
 class MSN(nn.Module):
-    def __init__(self, num_points=8192, bottleneck_size=256, n_primitives=16):
+    def __init__(self, num_points=8192, bottleneck_size=512, n_primitives=16):
         super(MSN, self).__init__()
         self.num_points = num_points
         self.bottleneck_size = bottleneck_size

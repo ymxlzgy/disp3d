@@ -9,7 +9,7 @@ class TreeGCN(nn.Module):
         self.in_feature = features[depth]
         self.out_feature = features[depth+1]
         self.node = node
-        self.degree = degrees[depth]
+        self.degree = degrees
         self.upsample = upsample
         self.activation = activation
         super(TreeGCN, self).__init__()

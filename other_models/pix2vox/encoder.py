@@ -8,7 +8,7 @@
 import torch
 import torchvision.models
 
-from pix2vox.attention import AttentionConv, AttentionStem
+from .attention import AttentionConv, AttentionStem
 
 class Encoder(torch.nn.Module):
     def __init__(self):
@@ -21,9 +21,16 @@ class Encoder(torch.nn.Module):
             resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool, resnet.layer1, resnet.layer2, resnet.layer3,
             resnet.layer4
         ])[:6]
+        """
         self.layer1 = torch.nn.Sequential(
             torch.nn.Conv2d(512, 512, kernel_size=3, padding=1),
             AttentionConv(512, 512, kernel_size=7, padding=3, groups=8),
+            torch.nn.BatchNorm2d(512),
+            torch.nn.ReLU()
+        )
+        """
+        self.layer1 = torch.nn.Sequential(
+            torch.nn.Conv2d(512, 512, kernel_size=3, padding=1),
             torch.nn.BatchNorm2d(512),
             torch.nn.ReLU()
         )
@@ -45,14 +52,14 @@ class Encoder(torch.nn.Module):
             torch.nn.ReLU(),
             torch.nn.MaxPool2d(kernel_size=2)
         )
-        """
-        self.layer4 = torch.nn.Sequential(
-            torch.nn.Conv2d(256, 384, kernel_size=3, padding=1),
-            torch.nn.BatchNorm2d(384),
-            torch.nn.ReLU(),
-            torch.nn.MaxPool2d(kernel_size=2)
-        )
-        """
+
+        # self.layer4 = torch.nn.Sequential(
+        #     torch.nn.Conv2d(256, 384, kernel_size=3, padding=1),
+        #     torch.nn.BatchNorm2d(384),
+        #     torch.nn.ReLU(),
+        #     torch.nn.MaxPool2d(kernel_size=2)
+        # )
+
 
     def forward(self, rendering_images):
         # print(rendering_images.size())  # torch.Size([batch_size, n_views, img_c, img_h, img_w])
